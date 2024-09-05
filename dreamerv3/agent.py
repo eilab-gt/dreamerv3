@@ -98,7 +98,7 @@ class Agent(nj.Module):
 
   @property
   def policy_keys(self):
-    return '/(enc|dyn|actor)/'
+    return '/(enc|dyn|dec|actor)/'
 
   @property
   def aux_spaces(self):
@@ -161,6 +161,17 @@ class Agent(nj.Module):
     act = {
         k: jnp.nanargmax(act[k], -1).astype(jnp.int32)
         if s.discrete else act[k] for k, s in self.act_space.items()}
+    if mode == "eval":
+        img_outs = self.dyn.imagine(lat, prevact, bdims=1)[1]
+        img_outs = {k: jnp.expand_dims(v, 0) for k, v in img_outs.items()}
+        imgs = self.dec(img_outs)
+        rec_outs = {k: jnp.expand_dims(v, 0) for k, v in out.items()}
+        rec = self.dec(rec_outs)
+        for key in self.dec.imgkeys:
+            pred = jnp.squeeze(jnp.concatenate([rec[key].mode(), imgs[key].mode()], 1), 0)
+            error = (pred - f32(obs[key]) + 1) / 2
+            outs[f'{key}_pred'] = pred
+            outs[f'{key}_error'] = error
     return act, outs, (lat, act)
 
   def train(self, data, carry):

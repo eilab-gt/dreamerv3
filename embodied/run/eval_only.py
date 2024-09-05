@@ -31,6 +31,12 @@ def eval_only(make_agent, make_env, make_logger, args):
     episode.add('length', 1, agg='sum')
     episode.add('rewards', tran['reward'], agg='stack')
 
+    tran['image'] = np.float32(tran['image'] / 255.0)  # Mimics the preprocessing to reduce brightness.
+    # Log videos
+    heights_stack = np.concatenate([tran['image'], tran['image_pred'], tran['image_error']], axis=0)
+    video = np.expand_dims(heights_stack, axis=0)  # Add batch dim.
+    episode.add('openloop/image', video, agg='stack')
+
     if tran['is_first']:
       episode.reset()
 
@@ -55,6 +61,7 @@ def eval_only(make_agent, make_env, make_logger, args):
       rew = result.pop('rewards')
       if len(rew) > 1:
         result['reward_rate'] = (np.abs(rew[1:] - rew[:-1]) >= 0.01).mean()
+      result['openloop/image'] = jaxutils.video_grid(result['openloop/image'].transpose((1, 0, 2, 3, 4)))
       epstats.add(result)
 
   fns = [bind(make_env, i) for i in range(args.num_envs)]
